@@ -73,7 +73,7 @@ class PPOAgent:
         self.critic = Critic(obs_dim).to(self.device)
 
         # optimizer
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=0.001)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=0.0001)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=0.005)
 
         # memory for training
@@ -106,12 +106,15 @@ class PPOAgent:
 
         return selected_action.cpu().detach().numpy()
 
-    def step(self, action: np.ndarray) -> Tuple[np.ndarray, np.float64, bool]:
+    def step(self, action: np.ndarray, ep_i=0) -> Tuple[np.ndarray, np.float64, bool]:
         """Take an action and return the response of the env."""
         next_state, reward, done, info = self.env.step(action)
         next_state = np.reshape(next_state, (1, -1)).astype(np.float64)
         reward = np.reshape(reward, (1, -1)).astype(np.float64)
+
         done = np.reshape(done, (1, -1))
+        # if (ep_i != 0) and ep_i % 500 == 0:
+        #     done[0][0] = True
 
         if not self.is_test:
             self.rewards.append(torch.FloatTensor(reward).to(self.device))
@@ -214,10 +217,12 @@ class PPOAgent:
         score = 0
 
         while self.total_step <= num_frames + 1:
+            sum_rew = []
             for i in range(self.rollout_len):
                 self.total_step += 1
                 action = self.select_action(state)
-                next_state, reward, done = self.step(action)
+                next_state, reward, done = self.step(action, i)
+                # self.env.render(mode="rgb_array")
 
                 state = next_state
                 score += reward[0][0]
@@ -227,6 +232,7 @@ class PPOAgent:
                     state = self.env.reset()
                     state = np.expand_dims(state, axis=0)
                     scores.append(score)
+                    sum_rew += [score]
                     score = 0
 
                     # self._plot(
@@ -236,8 +242,9 @@ class PPOAgent:
             actor_loss, critic_loss = self.update_model(next_state)
             actor_losses.append(actor_loss)
             critic_losses.append(critic_loss)
-            print("total step: {0:.3f}, scores: {1:.3f}".format(
-                self.total_step, scores[-1]))
+            print("total step: {0}, scores: {1:.3f}".format(
+                self.total_step, np.mean(sum_rew)))
+            # print(sum_rew)
 
         # termination
         self.env.close()
@@ -251,6 +258,7 @@ class PPOAgent:
         score = 0
 
         frames = []
+        i = 0
         while not done:
             frames.append(self.env.render(mode="rgb_array"))
             action = self.select_action(state)
@@ -258,6 +266,9 @@ class PPOAgent:
 
             state = next_state
             score += reward
+            if done[0][0] == True:
+                print(i)
+            i += 1
 
         print("score: ", score)
         self.env.close()
@@ -328,7 +339,7 @@ def main():
         batch_size=64,
         epsilon=0.2,
         epoch=64,
-        rollout_len=2048,
+        rollout_len=2000,
         entropy_weight=0.005
     )
     #
