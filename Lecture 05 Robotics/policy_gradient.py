@@ -108,13 +108,13 @@ class PPOAgent:
 
     def step(self, action: np.ndarray, ep_i=0) -> Tuple[np.ndarray, np.float64, bool]:
         """Take an action and return the response of the env."""
-        next_state, reward, done, info = self.env.step(action)
+        next_state, reward, done, _, info = self.env.step(action)
         next_state = np.reshape(next_state, (1, -1)).astype(np.float64)
         reward = np.reshape(reward, (1, -1)).astype(np.float64)
 
         done = np.reshape(done, (1, -1))
-        # if (ep_i != 0) and ep_i % 500 == 0:
-        #     done[0][0] = True
+        if (ep_i != 0) and ep_i % 500 == 0:
+            done[0][0] = True
 
         if not self.is_test:
             self.rewards.append(torch.FloatTensor(reward).to(self.device))
@@ -209,7 +209,7 @@ class PPOAgent:
         """Train the agent."""
         self.is_test = False
 
-        state = self.env.reset()
+        state, info = self.env.reset()
         state = np.expand_dims(state, axis=0)
 
         actor_losses, critic_losses = [], []
@@ -229,7 +229,7 @@ class PPOAgent:
 
                 # if episode ends
                 if done[0][0]:
-                    state = self.env.reset()
+                    state, info = self.env.reset()
                     state = np.expand_dims(state, axis=0)
                     scores.append(score)
                     sum_rew += [score]
@@ -253,7 +253,7 @@ class PPOAgent:
         """Test the agent."""
         self.is_test = True
 
-        state = self.env.reset()
+        state, info = self.env.reset()
         done = False
         score = 0
 
@@ -325,7 +325,7 @@ def ppo_iter(
 
 def main():
     # environment
-    env_id = "Pendulum-v0"
+    env_id = "Pendulum-v1"
     env = gym.make(env_id)
     env = ActionNormalizer(env)
 
@@ -339,7 +339,7 @@ def main():
         batch_size=64,
         epsilon=0.2,
         epoch=64,
-        rollout_len=2000,
+        rollout_len=2048,
         entropy_weight=0.005
     )
     #
